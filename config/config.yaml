@@ -1,0 +1,8 @@
+model_paths:
+  model1: "./models/cahya-ner-finetuned-v2"
+  model2: "cahya/bert-base-indonesian-NER"
+
+api_settings:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
