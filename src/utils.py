@@ -1,5 +1,7 @@
 import torch
 from collections import defaultdict
+import re
+from datetime import datetime, timedelta
 
 def format_response(entities):
     unique_entities = defaultdict(set)
@@ -63,3 +65,71 @@ def process_entities(model_output, id2label, offset_mapping, text):  # Tambahkan
     
     # Proses penggabungan entitas
     return merge_entities(entities)
+
+def group_entities_by_type(entities_list):
+    grouped = {}
+    for ent in entities_list:
+        ent_type = ent.get("type")
+        ent_text = ent.get("text")
+        if ent_type and ent_text:
+            grouped.setdefault(ent_type, set()).add(ent_text)
+    return {k: list(v) for k, v in grouped.items()}
+
+# Fungsi baru untuk mengonversi teks relatif menjadi tanggal
+def convert_relative_dates(text):
+    """
+    Mengganti kata-kata relatif dalam teks dengan tanggal aktual dalam format YYYY-MM-DD
+    Contoh:
+      "hari ini" -> "2023-10-15" (tanggal hari ini)
+      "besok"    -> "2023-10-16"
+      "lusa"     -> "2023-10-17"
+      "kemarin"  -> "2023-10-14"
+    """
+    today = datetime.now().date()
+    
+    # Mapping untuk kata relatif dan delta waktu
+    date_mapping = {
+        r'kemarin\b': today - timedelta(days=1),
+        r'hari ini\b': today,
+        r'besok\b': today + timedelta(days=1),
+        r'lusa\b': today + timedelta(days=2),
+    }
+    
+    # Fungsi untuk melakukan penggantian
+    def replace_match(match):
+        word = match.group(0).lower()
+        for pattern, date_val in date_mapping.items():
+            if re.search(pattern, word):
+                return date_val.strftime("%Y-%m-%d")
+        return word
+    
+    # Regex untuk menemukan semua kata relatif
+    pattern = r'\b(kemarin|hari ini|besok|lusa)\b'
+    return re.sub(pattern, replace_match, text, flags=re.IGNORECASE)
+
+def extract_relative_dates(text):
+    """
+    Mengekstrak kata relatif dari teks dan mengonversinya menjadi tanggal
+    Mengembalikan daftar tanggal dalam format YYYY-MM-DD
+    """
+    today = datetime.now().date()
+    date_mapping = {
+        'kemarin': today - timedelta(days=1),
+        'hari ini': today,
+        'besok': today + timedelta(days=1),
+        'lusa': today + timedelta(days=2),
+    }
+    
+    # Pola regex untuk menemukan kata relatif
+    pattern = r'\b(kemarin|hari ini|besok|lusa)\b'
+    found_dates = []
+    
+    # Cari semua kemunculan kata relatif
+    matches = re.finditer(pattern, text, flags=re.IGNORECASE)
+    for match in matches:
+        keyword = match.group(0).lower()
+        if keyword in date_mapping:
+            date_val = date_mapping[keyword]
+            found_dates.append(date_val.strftime("%Y-%m-%d"))
+    
+    return found_dates
