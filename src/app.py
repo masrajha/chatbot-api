@@ -11,13 +11,15 @@ from flask_cors import CORS
 app = Flask(__name__)
 
 # Inisialisasi CORS dengan konfigurasi
-CORS(app, resources={
-    r"/search": {
-        "origins": "http://localhost:3000",
-        "methods": ["POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
-    }
-})
+# CORS(app, resources={
+#     r"/search": {
+#         "origins": "http://localhost:3000",
+#         "methods": ["POST", "OPTIONS"],
+#         "allow_headers": ["Content-Type"]
+#     }
+# })
+
+CORS(app, resources={r"/search": {"origins": "*"}})
 
 # Daftar kata kunci untuk klasifikasi
 KULIAH_KEYWORDS = {
