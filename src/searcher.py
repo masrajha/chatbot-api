@@ -190,6 +190,13 @@ class SheetSearcher:
                                 for q_val in query['values']
                             )
                         )
+                    elif entity_type == 'TIM':  # Penanganan khusus untuk waktu
+                        col_mask = self.df[norm_col].apply(
+                            lambda cell_val: any(
+                                q_val in cell_val  # Substring matching setelah normalisasi
+                                for q_val in query['values']
+                            )
+                        )
                     else:
                         col_mask = self.df[norm_col].apply(
                             lambda cell_val: any(

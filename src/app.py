@@ -4,9 +4,9 @@ from src.model_loader import load_models
 from src.ner_processor import compare_model
 from src.google_sheets import get_sheet_data
 from src.searcher import SheetSearcher
-from src.utils import group_entities_by_type, convert_relative_dates, extract_relative_dates  # Perubahan disini
+from src.utils import group_entities_by_type, convert_relative_dates, extract_relative_dates
 import sys
-from flask_cors import CORS  # Import yang benar
+from flask_cors import CORS
 
 app = Flask(__name__)
 
@@ -18,6 +18,34 @@ CORS(app, resources={
         "allow_headers": ["Content-Type"]
     }
 })
+
+# Daftar kata kunci untuk klasifikasi
+KULIAH_KEYWORDS = {
+    'kuliah', 'perkuliahan', 'belajar', 'mengajar', 
+    'matkul', 'mata kuliah', 'kelas', 'jadwal kuliah',
+    'dosen', 'materi', 'pertemuan', 'perkuliahan'
+}
+SEMINAR_KEYWORDS = {
+    'seminar', 'usul', 'hasil', 'kompre', 'ujian', 
+    'skripsi', 'sidang', 'proposal', 'kolokium',
+    'tugas akhir', 'ta', 's2', 'magister'
+}
+
+def classify_query(query: str) -> list:
+    """Tentukan jenis dataset yang perlu dicari berdasarkan kata kunci"""
+    query_lower = query.lower()
+    
+    has_kuliah = any(keyword in query_lower for keyword in KULIAH_KEYWORDS)
+    has_seminar = any(keyword in query_lower for keyword in SEMINAR_KEYWORDS)
+    
+    if has_kuliah and has_seminar:
+        return ['Kuliah', 'Seminar']  # Cari kedua dataset
+    elif has_kuliah:
+        return ['Kuliah']
+    elif has_seminar:
+        return ['Seminar']
+    else:
+        return ['Kuliah', 'Seminar']  # Default cari semua
 
 # Load model saat aplikasi dimulai
 try:
@@ -41,52 +69,53 @@ def search():
         }), 400
 
     try:
+        # Klasifikasi jenis pencarian berdasarkan teks
+        search_types = classify_query(text)
+        print(f"Jenis pencarian yang terdeteksi: {search_types}")
+        
+        # Ekstrak tanggal relatif dan proses teks
         relative_dates = extract_relative_dates(text)
         print(f"Tanggal relatif ditemukan: {relative_dates}")
-        # Ambil data terbaru dari Google Sheets
-        print("Mengambil data kuliah...")
-        kuliah_data = get_sheet_data('Kuliah')
-        print("Mengambil data seminar...")
-        seminar_data = get_sheet_data('Seminar')
-        
-        # Ekstrak entitas dari teks
         processed_text = convert_relative_dates(text)
         print(f"Teks setelah diproses: {processed_text}")
         
-        kuliah_data = get_sheet_data('Kuliah')
-        seminar_data = get_sheet_data('Seminar')
-        
-        # Gunakan teks yang sudah diproses untuk NER
-        results = compare_model(text, tokenizer1, model1, tokenizer2, model2)
+        # Ekstrak entitas dari teks
+        results = compare_model(processed_text, tokenizer1, model1, tokenizer2, model2)
         entities_raw = results.get('hybrid', [])
         entities = group_entities_by_type(entities_raw)
         
+        # Tambahkan tanggal relatif ke entitas DAT
         if relative_dates:
             if 'DAT' in entities:
                 entities['DAT'].extend(relative_dates)
             else:
                 entities['DAT'] = relative_dates
-            print(f"Entitas DAT setelah ditambah: {entities['DAT']}")
+            print(f"Entitas DAT setelah ditambah: {entities.get('DAT', [])}")
             
-        print (entities)
+        print(f"Entitas yang ditemukan: {entities}")
         
-        # Cari data kuliah
-        kuliah_searcher = SheetSearcher(kuliah_data, 'Kuliah')
-        hasil_kuliah = kuliah_searcher.search(entities)
-        
-        # Cari data seminar
-        seminar_searcher = SheetSearcher(seminar_data, 'Seminar')
-        hasil_seminar = seminar_searcher.search(entities)
-        
-        # Gabungkan hasil dan tambahkan jenis data
         combined_data = []
-        for item in hasil_kuliah:
-            item['jenis_data'] = 'kuliah'
-            combined_data.append(item)
         
-        for item in hasil_seminar:
-            item['jenis_data'] = 'seminar'
-            combined_data.append(item)
+        # Cari data hanya untuk jenis yang diperlukan
+        if 'Kuliah' in search_types:
+            print("Mengambil dan mencari data kuliah...")
+            kuliah_data = get_sheet_data('Kuliah')
+            kuliah_searcher = SheetSearcher(kuliah_data, 'Kuliah')
+            hasil_kuliah = kuliah_searcher.search(entities)
+            for item in hasil_kuliah:
+                item['jenis_data'] = 'kuliah'
+            combined_data.extend(hasil_kuliah)
+            print(f"Found {len(hasil_kuliah)} kuliah records")
+        
+        if 'Seminar' in search_types:
+            print("Mengambil dan mencari data seminar...")
+            seminar_data = get_sheet_data('Seminar')
+            seminar_searcher = SheetSearcher(seminar_data, 'Seminar')
+            hasil_seminar = seminar_searcher.search(entities)
+            for item in hasil_seminar:
+                item['jenis_data'] = 'seminar'
+            combined_data.extend(hasil_seminar)
+            print(f"Found {len(hasil_seminar)} seminar records")
         
         # Format respons berdasarkan hasil pencarian
         if not combined_data:
@@ -95,16 +124,20 @@ def search():
             return jsonify({
                 "message": f"Data '{display_text}' tidak ditemukan",
                 "data": [],
-                "entities": entities
+                "entities": entities,
+                "search_types": search_types  # Tambahkan info jenis pencarian
             })
         else:
             return jsonify({
                 "message": "Berhasil",
                 "data": combined_data,
-                "entities": entities
+                "entities": entities,
+                "search_types": search_types  # Tambahkan info jenis pencarian
             })
             
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "message": f"Terjadi kesalahan: {str(e)}",
             "data": [],
