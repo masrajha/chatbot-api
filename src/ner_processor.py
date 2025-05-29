@@ -24,10 +24,10 @@ def hybrid_ner(text, tokenizer1, model1, tokenizer2, model2):
         label2 = id2label2[p2]
         
         entity_type = None
-        if any(tag in label1 for tag in ['PS', 'LOC', 'MK']):
+        if any(tag in label1 for tag in ['PS', 'LOC', 'MK','PER','DAT','TIM']):
             entity_type = label1
         else:
-            entity_type = label2 if label2 not in ['PS', 'LOC', 'MK'] else 'O'
+            entity_type = label2 if label2 not in ['PS', 'LOC', 'MK','PER','DAT','TIM'] else 'O'
         
         combined_labels.append(entity_type)
 

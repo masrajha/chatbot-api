@@ -1,3 +1,4 @@
+#app.py
 from flask import Flask, request, jsonify
 from src.model_loader import load_models
 from src.ner_processor import compare_model
@@ -5,8 +6,18 @@ from src.google_sheets import get_sheet_data
 from src.searcher import SheetSearcher
 from src.utils import group_entities_by_type, convert_relative_dates, extract_relative_dates  # Perubahan disini
 import sys
+from flask_cors import CORS  # Import yang benar
 
 app = Flask(__name__)
+
+# Inisialisasi CORS dengan konfigurasi
+CORS(app, resources={
+    r"/search": {
+        "origins": "http://localhost:3000",
+        "methods": ["POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # Load model saat aplikasi dimulai
 try:
