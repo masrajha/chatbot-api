@@ -1,6 +1,6 @@
 #app.py
 from flask import Flask, request, jsonify
-from src.model_loader import load_models
+from src.model_loader import load_models, load_model_classify, classify_intent
 from src.ner_processor import compare_model
 from src.google_sheets import get_sheet_data
 from src.searcher import SheetSearcher
@@ -21,38 +21,13 @@ app = Flask(__name__)
 
 CORS(app, resources={r"/search": {"origins": "*"}})
 
-# Daftar kata kunci untuk klasifikasi
-KULIAH_KEYWORDS = {
-    'kuliah', 'perkuliahan', 'belajar', 'mengajar', 
-    'matkul', 'mata kuliah', 'kelas', 'jadwal kuliah',
-    'dosen', 'materi', 'pertemuan', 'perkuliahan'
-}
-SEMINAR_KEYWORDS = {
-    'seminar', 'usul', 'hasil', 'kompre', 'ujian', 
-    'skripsi', 'sidang', 'proposal', 'kolokium',
-    'tugas akhir', 'ta', 's2', 'magister'
-}
-
-def classify_query(query: str) -> list:
-    """Tentukan jenis dataset yang perlu dicari berdasarkan kata kunci"""
-    query_lower = query.lower()
-    
-    has_kuliah = any(keyword in query_lower for keyword in KULIAH_KEYWORDS)
-    has_seminar = any(keyword in query_lower for keyword in SEMINAR_KEYWORDS)
-    
-    if has_kuliah and has_seminar:
-        return ['Kuliah', 'Seminar']  # Cari kedua dataset
-    elif has_kuliah:
-        return ['Kuliah']
-    elif has_seminar:
-        return ['Seminar']
-    else:
-        return ['Kuliah', 'Seminar']  # Default cari semua
-
-# Load model saat aplikasi dimulai
 try:
     tokenizer1, model1, tokenizer2, model2 = load_models()
     print("Model dan tokenizer berhasil dimuat")
+    CHECKPOINT_PATH = "models/classification"
+    model_klasifikasi, tokenizer, id2label, device = load_model_classify(CHECKPOINT_PATH)
+    model_klasifikasi.eval()
+    print("Model klasifikasi berhasil dimuat")
 except Exception as e:
     print(f"Gagal memuat model: {str(e)}")
     sys.exit(1)
@@ -72,7 +47,7 @@ def search():
 
     try:
         # Klasifikasi jenis pencarian berdasarkan teks
-        search_types = classify_query(text)
+        search_types = classify_intent(text, model_klasifikasi, tokenizer, id2label, device)
         print(f"Jenis pencarian yang terdeteksi: {search_types}")
         
         # Ekstrak tanggal relatif dan proses teks
@@ -100,7 +75,7 @@ def search():
         combined_data = []
         
         # Cari data hanya untuk jenis yang diperlukan
-        if 'Kuliah' in search_types:
+        if 'kuliah' in search_types:
             print("Mengambil dan mencari data kuliah...")
             kuliah_data = get_sheet_data('Kuliah')
             kuliah_searcher = SheetSearcher(kuliah_data, 'Kuliah')
@@ -110,15 +85,16 @@ def search():
             combined_data.extend(hasil_kuliah)
             print(f"Found {len(hasil_kuliah)} kuliah records")
         
-        if 'Seminar' in search_types:
-            print("Mengambil dan mencari data seminar...")
-            seminar_data = get_sheet_data('Seminar')
-            seminar_searcher = SheetSearcher(seminar_data, 'Seminar')
-            hasil_seminar = seminar_searcher.search(entities)
-            for item in hasil_seminar:
-                item['jenis_data'] = 'seminar'
-            combined_data.extend(hasil_seminar)
-            print(f"Found {len(hasil_seminar)} seminar records")
+        else: 
+            if 'seminar' in search_types:
+                print("Mengambil dan mencari data seminar...")
+                seminar_data = get_sheet_data('Seminar')
+                seminar_searcher = SheetSearcher(seminar_data, 'Seminar')
+                hasil_seminar = seminar_searcher.search(entities)
+                for item in hasil_seminar:
+                    item['jenis_data'] = 'seminar'
+                combined_data.extend(hasil_seminar)
+                print(f"Found {len(hasil_seminar)} seminar records")
         
         # Format respons berdasarkan hasil pencarian
         if not combined_data:
