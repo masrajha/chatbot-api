@@ -82,7 +82,8 @@ def search():
         print(f"Teks setelah diproses: {processed_text}")
         
         # Ekstrak entitas dari teks
-        results = compare_model(processed_text, tokenizer1, model1, tokenizer2, model2)
+        # results = compare_model(processed_text, tokenizer1, model1, tokenizer2, model2)
+        results = compare_model(text, tokenizer1, model1, tokenizer2, model2)
         entities_raw = results.get('hybrid', [])
         entities = group_entities_by_type(entities_raw)
         

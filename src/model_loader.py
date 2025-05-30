@@ -1,7 +1,7 @@
 from transformers import AutoTokenizer, AutoModelForTokenClassification
 
 def load_models():
-    model1_path = "models/cahya-ner-finetuned-anie-v2"
+    model1_path = "models/cahya-ner-finetuned-anie-v3"
     model2_name = "cahya/bert-base-indonesian-NER"
     
     # Load tokenizer masing-masing model
