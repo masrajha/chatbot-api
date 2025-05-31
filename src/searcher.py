@@ -182,7 +182,14 @@ class SheetSearcher:
                     )
                 else:
                     # PERBAIKAN UTAMA: Gunakan partial_ratio untuk MK dengan threshold lebih rendah
-                    if entity_type == 'MK':
+                    if entity_type == 'PER' and self.sheet_type == 'Seminar':
+                        col_mask = self.df[norm_col].apply(
+                            lambda cell_val: any(
+                                fuzz.partial_ratio(q_val, cell_val) > 75  # Threshold lebih rendah
+                                for q_val in query['values']
+                            )
+                        )
+                    elif entity_type == 'MK':
                         col_mask = self.df[norm_col].apply(
                             lambda cell_val: any(
                                 fuzz.partial_ratio(q_val, cell_val) > 75 or 

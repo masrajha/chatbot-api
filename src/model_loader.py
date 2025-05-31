@@ -1,5 +1,5 @@
 from transformers import AutoTokenizer, AutoModelForTokenClassification, AutoModelForSequenceClassification
-import torch,json
+import torch,json,re
 
 def load_models():
     model1_path = "models/cahya-ner-finetuned-anie-v3"
@@ -35,10 +35,18 @@ def load_model_classify(checkpoint_path):
 
     return model, tokenizer, id2label, device
 
+def remove_question_mark(text):
+    # Hapus semua tanda tanya
+    return re.sub(r'\?', '', text).strip()
+
 def classify_intent(text: str, model, tokenizer, id2label, device):
     # Tokenisasi input tunggal
+    
+    text_remove = remove_question_mark(text)
+    # text_remove = text
+    
     inputs = tokenizer(
-        [text],  # tetap harus dalam list karena tokenizer batch
+        [text_remove],  # tetap harus dalam list karena tokenizer batch
         return_tensors="pt",
         truncation=True,
         padding=True,

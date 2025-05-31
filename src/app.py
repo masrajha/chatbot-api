@@ -20,14 +20,40 @@ app = Flask(__name__)
 # })
 
 CORS(app, resources={r"/search": {"origins": "*"}})
+KULIAH_KEYWORDS = {
+    'kuliah', 'perkuliahan', 'belajar', 'mengajar', 
+    'matkul', 'mata kuliah', 'kelas', 'jadwal kuliah', 
+    'materi', 'pertemuan', 'perkuliahan'
+}
+SEMINAR_KEYWORDS = {
+    'seminar', 'usul', 'hasil', 'kompre', 'ujian', 
+    'skripsi', 'proposal', 'kolokium',
+    'tugas akhir', 'ta'
+}
 
+def classify_query(query: str) -> list:
+    """Tentukan jenis dataset yang perlu dicari berdasarkan kata kunci"""
+    query_lower = query.lower()
+    
+    has_kuliah = any(keyword in query_lower for keyword in KULIAH_KEYWORDS)
+    has_seminar = any(keyword in query_lower for keyword in SEMINAR_KEYWORDS)
+    
+    if has_kuliah and has_seminar:
+        return ['kuliah', 'seminar']  # Cari kedua dataset
+    elif has_kuliah:
+        return ['kuliah']
+    elif has_seminar:
+        return ['seminar']
+    else:
+        return ['kuliah', 'seminar']  # Default cari semua
+    
 try:
     tokenizer1, model1, tokenizer2, model2 = load_models()
     print("Model dan tokenizer berhasil dimuat")
-    CHECKPOINT_PATH = "models/classification"
-    model_klasifikasi, tokenizer, id2label, device = load_model_classify(CHECKPOINT_PATH)
-    model_klasifikasi.eval()
-    print("Model klasifikasi berhasil dimuat")
+    # CHECKPOINT_PATH = "models/classification-v3"
+    # model_klasifikasi, tokenizer, id2label, device = load_model_classify(CHECKPOINT_PATH)
+    # model_klasifikasi.eval()
+    # print("Model klasifikasi berhasil dimuat")
 except Exception as e:
     print(f"Gagal memuat model: {str(e)}")
     sys.exit(1)
@@ -47,7 +73,8 @@ def search():
 
     try:
         # Klasifikasi jenis pencarian berdasarkan teks
-        search_types = classify_intent(text, model_klasifikasi, tokenizer, id2label, device)
+        # search_types = classify_intent(text, model_klasifikasi, tokenizer, id2label, device)
+        search_types = classify_query(text)
         print(f"Jenis pencarian yang terdeteksi: {search_types}")
         
         # Ekstrak tanggal relatif dan proses teks
@@ -69,7 +96,10 @@ def search():
             else:
                 entities['DAT'] = relative_dates
             print(f"Entitas DAT setelah ditambah: {entities.get('DAT', [])}")
-            
+        
+        if 'MK' in entities:
+            search_types = ['kuliah']
+                
         print(f"Entitas yang ditemukan: {entities}")
         
         combined_data = []
