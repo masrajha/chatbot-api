@@ -6,6 +6,11 @@ from src.google_sheets import get_sheet_data
 from src.searcher import SheetSearcher
 from src.utils import group_entities_by_type, convert_relative_dates, extract_relative_dates
 import sys
+import numpy as np
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.image import img_to_array
+from PIL import Image
+import os
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -20,6 +25,31 @@ app = Flask(__name__)
 # })
 
 CORS(app, resources={r"/search": {"origins": "*"}})
+CORS(app, resources={r"/predict": {"origins": "*"}})
+
+# Muat model Keras
+model_path = os.path.join('models/fer_models', 'fer_model_20250530-073815_final.keras')
+model = load_model(model_path)
+
+# Label emosi sesuai FER-2013
+emotion_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
+
+def preprocess_image(image):
+    """
+    Preprocessing gambar untuk model:
+    - Konversi ke grayscale
+    - Resize ke 48x48 pixel
+    - Normalisasi pixel [0, 1]
+    - Ekspansi dimensi untuk input model
+    """
+    image = image.convert('L')  # Konversi ke grayscale
+    image = image.resize((48, 48))  # Resize sesuai input model
+    image = img_to_array(image)  # Konversi ke array
+    image = image.astype('float32') / 255.0  # Normalisasi
+    image = np.expand_dims(image, axis=0)  # Tambahkan dimensi batch
+    image = np.expand_dims(image, axis=-1)  # Tambahkan channel (1 channel untuk grayscale)
+    return image
+
 KULIAH_KEYWORDS = {
     'kuliah', 'perkuliahan', 'belajar', 'mengajar', 
     'matkul', 'mata kuliah', 'kelas', 'jadwal kuliah', 
@@ -57,6 +87,41 @@ try:
 except Exception as e:
     print(f"Gagal memuat model: {str(e)}")
     sys.exit(1)
+
+@app.route('/predict', methods=['POST'])
+def predict_emotion():
+    # Cek apakah request memiliki file gambar
+    if 'file' not in request.files:
+        return jsonify({'error': 'No image uploaded'}), 400
+    
+    file = request.files['file']
+    
+    # Validasi ekstensi file
+    if file.filename == '':
+        return jsonify({'error': 'Empty filename'}), 400
+    if not (file.filename.lower().endswith(('.png', '.jpg', '.jpeg'))):
+        return jsonify({'error': 'Invalid file format. Use PNG, JPG, or JPEG'}), 400
+
+    try:
+        # Baca dan preprocess gambar
+        image = Image.open(file.stream)
+        processed_image = preprocess_image(image)
+        
+        # Prediksi emosi
+        predictions = model.predict(processed_image)
+        emotion_index = np.argmax(predictions[0])
+        emotion = emotion_labels[emotion_index]
+        confidence = float(predictions[0][emotion_index])
+        
+        return jsonify({
+            'emotion': emotion,
+            'confidence': confidence,
+            'all_predictions': dict(zip(emotion_labels, predictions[0].astype(float)))
+        })
+    
+    except Exception as e:
+        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+
 
 @app.route('/search', methods=['POST'])
 def search():
